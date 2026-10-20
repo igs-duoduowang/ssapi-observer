@@ -153,6 +153,12 @@ h3.sub + table + h3.sub, table + h3.sub { margin-top: 26px; }
 .empty { text-align: center; padding: 80px 20px; color: var(--ink-2); }
 .empty h1 { font-size: 22px; color: var(--ink); }
 .empty ol { display: inline-block; text-align: left; margin: 10px auto 0; }
+.ask-card { max-width: 820px; margin: 36px auto 0; text-align: left; padding: 18px 20px; }
+.ask-card h2 { font-size: 18px; margin: 0 0 6px; color: var(--ink); }
+.ask-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 12px; }
+.ask-grid label { font-size: 13px; color: var(--ink-2); display: grid; gap: 4px; }
+#askText { width: 100%; font: 13px/1.55 ui-monospace, Consolas, "Microsoft JhengHei", monospace; color: var(--ink);
+  background: var(--hover); border: 1px solid var(--ring); border-radius: 8px; padding: 10px 12px; resize: vertical; }
 .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink-p); color: var(--panel); padding: 8px 14px; border-radius: 6px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
 .toast.show { opacity: 1; }
 </style>
@@ -234,13 +240,31 @@ h3.sub + table + h3.sub, table + h3.sub { margin-top: 26px; }
   <main>
     <div class="empty" id="emptyView">
       <h1>先載入資料</h1>
-      <p>點左上「選擇檔案…」，兩張表可以一次選起來：</p>
+      <p>點左上「選擇檔案…」，檔案可以一次選起來：</p>
       <ol>
         <li>玩家基本資料（一個玩家一列）</li>
         <li>玩家每日明細（一個玩家 × 一天 一列）</li>
-        <li class="dim">（選填）補充欄位：離場前乾旱檔，會依日期＋玩家ID 併進每日明細</li>
+        <li class="dim">（選填）補充檔：離場前乾旱、客群，會自動併進上面兩張表</li>
       </ol>
-      <p class="hint">欄位格式見 資料需求.md；想先試用可以載入「假資料」資料夾裡的兩個檔。<br>資料只在這台電腦的瀏覽器裡計算，不會上傳。</p>
+      <p class="hint">資料只在這台電腦的瀏覽器裡計算，不會上傳。</p>
+
+      <div class="card ask-card">
+        <h2>還沒有資料？跟 MrGoGo 要</h2>
+        <p class="hint" style="margin-top:0">填好下面五項，按「複製 prompt」貼給 MrGoGo。它會先估價，你核准一次就會交上面那兩個檔。</p>
+        <div class="ask-grid">
+          <label>遊戲名稱<input type="text" data-k="遊戲名稱" placeholder="例：寶包熊貓（BunBunPanda）"></label>
+          <label>GameID<input type="text" data-k="GameID" placeholder="例：1089"></label>
+          <label>上線日<input type="date" data-k="上線日"></label>
+          <label>開始日<input type="date" data-k="開始日"></label>
+          <label>結束日<input type="date" data-k="結束日"></label>
+        </div>
+        <div class="hint" style="margin:6px 0 10px">開始日可以晚於上線日；上線日一定要填，不然 MrGoGo 會把整個歷史都掃一遍，費用會暴增。</div>
+        <textarea id="askText" readonly rows="14" aria-label="要貼給 MrGoGo 的 prompt"></textarea>
+        <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+          <button class="btn solid" type="button" id="askCopy">📋 複製 prompt</button>
+          <span class="hint" id="askLeft" style="margin:0"></span>
+        </div>
+      </div>
     </div>
 
     <div id="report" hidden>
@@ -379,6 +403,63 @@ h3.sub + table + h3.sub, table + h3.sub { margin-top: 26px; }
 </div>
 <div class="toast" id="toast"></div>
 
+<script type="text/plain" id="askTpl">
+請幫我撈【遊戲名稱】（GameID【GameID】，sssapi-prod）的版本比較資料，日期【開始日】～【結束日】，以美東時間換日。這款遊戲的上線日是【上線日】，上線日以前沒有資料。
+
+做法：請一次 dry-run 估出下面全部內容的總費用回報給我，我核准一次後就直接產出兩個 CSV。不要分步驟、不要中途停下來問；遇到跟下面規則不同的狀況，照規則能做的先做，例外的筆數與樣本寫在交付說明裡。如果總費用超過你的執行上限，請先自動拿掉「離場前乾旱」四欄再估一次，兩個數字一起回報，讓我一次選。
+
+共通條件
+- 資料晚到的風險我承擔，不需要等上游完成證明；結束日要已經過完美東午夜
+- SC：CreditType='dSCoin'，全部明細都算（包含配不到 Statement 的）
+- 排除商戶：SSSAPI_dev、SSSAPI_dev2、tcgs1gc_tcgs1gcuat、tcgs1sc_tcgs1scuat、gcapi_sgl_usd_kaaadmin、gcapi_sgl_usd_topadmin
+- 排除 AccountType=1（測試帳號）
+- 金額一律「原值 × Ratio」換成 SC
+- 所有平均、中位數、留存我這邊自己算，只給加總後的原始數字
+- 開始日不一定是上線日。首次遊玩日要用玩家「真正第一次玩這款遊戲」的日期（就算早於開始日）：回查明細時只掃上線日～開始日前一天的分區，不要掃更早的歷史（開始日＝上線日就完全不用回查）；其他欄位都只用開始日～結束日這段資料算，不回查歷史
+- JP 不另外加，派彩照 WinAmount
+
+一局的定義
+- 一局＝同一玩家（MerchantID＋UserID）的一個 GameNO
+- 局首＝WagersID 等於 GameNO、BetAmount>0 的那筆；子局＝同 GameNO 的其他明細（BetAmount=0）
+- 局首 BetType=NORMAL 是「一般局」；BUYBONUS 是「購買局」；FREESPIN 不算局數，但贏分算進總派彩
+- 一般局只要有任何子局（不論 SpecialGameId 是多少）就算自然觸發 FG，一局最多算一次
+- 一局歸在局首的美東日期，子局跨日也算回局首那天
+- 玩家的機率版本＝一般局局首的 ChanceVersion 原值（BB 開頭的不算，不要合併或改名）；期間內有兩種以上的填「多版本」；完全沒有一般局的填「未分類」
+
+檔案一：玩家基本資料.csv（一個玩家一列，UTF-8）
+玩家ID, 機率版本, 首次遊玩日, API目錄名稱, 商戶原名, 幣別, 平台週押注, 平台累積押注, 客群, 首次FG前局數
+- 玩家ID：MerchantID_UserID；幣別：填 SC
+- 首次遊玩日：玩家真正第一次玩這款遊戲的美東日期，可以早於開始日（見上面共通條件）
+- 首次FG前局數：只算首次遊玩日在開始日以後的玩家：從第一個一般局開始數，到第一個觸發 FG 的一般局之前玩了幾個一般局（不含觸發那局）；沒觸發過、或首次遊玩日早於開始日的留空
+- 平台週押注、平台累積押注、客群：用 UserLifeTimeBetLog「上線日前一天」那份快照（用上線前的值，才不會被這款遊戲本身影響）（平台週押注＝Recent7DaysBet、平台累積押注＝LifeTimeBet）；明細 UserID 去掉 _SC 後對快照的 UserID；原值直接當 SC；七日範圍照快照原值用。客群分級（由上往下，任一達標即算）：
+  黑卡大客：平台週押注>=150000 或 平台累積押注>=1500000
+  超級大客：>=16000 或 >=160000
+  大客：>=5200 或 >=52000
+  中客：>=1500 或 >=15000
+  小客：>=400 或 >=4000
+  其他：超級小客
+  找不到快照的三欄留空，不要歸成超級小客。客群是我接受的試算假設，說明請註明「客群為試算，未經資料負責人確認」
+
+檔案二：玩家每日明細.csv（一個玩家 × 一天一列，只列有玩的日子，UTF-8）
+日期, 玩家ID, 局數, 總押注, 總派彩, FG觸發次數, FG總贏分, BuyBonus次數, BuyBonus金額, 最大單局倍數, 首局時間, 末局時間, 離場前連續未中FG局數, 從未觸發FG, 離場前連續未中15倍局數, 從未中15倍
+- 局數：一般局數；總押注：一般局局首 BetAmount 加總
+- 總派彩：當天所有局（一般局、購買局、FREESPIN）全部明細的 WinAmount 加總
+- FG觸發次數：觸發 FG 的一般局數；FG總贏分：一般局子局的 WinAmount 加總
+- BuyBonus次數：購買局數；BuyBonus金額：購買局局首 BetAmount 加總
+- 最大單局倍數：一般局（局首＋子局 WinAmount 合計）÷ 局首 BetAmount，當天最大值
+- 首局時間、末局時間：當天第一個、最後一個局首的美東時間，HH:MM:SS
+- 離場前連續未中FG局數：從當天最後一個一般局往回數，到最近一次觸發 FG 的一般局為止，中間有幾個一般局（不含那局）；可跨日往前數到開始日。從未觸發FG：開始日到當天都沒觸發過填 1（此時前一欄填開始日以來的一般局總數），否則 0
+- 離場前連續未中15倍局數：同上，改成數到最近一次「整局贏分 ÷ 局首押注 ≥ 15」的一般局；從未中15倍規則同上
+- 購買局不算局數，也不會讓上面兩個計數歸零；當天沒有一般局的日子，最大單局倍數與上面四欄留空
+
+交付時請一起回報
+1. 兩個檔各幾列；各機率版本幾位玩家；多版本、未分類各幾位
+2. 每日的玩家數、一般局數、購買局數、總押注、總派彩（我會拿來對帳）
+3. 子局的 SpecialGameId 各有哪些值、各幾筆
+4. 例外狀況：找不到局首的子局、重複局首、同局多筆正押、其他沒見過的結構，各幾筆與處理方式
+5. 客群各級人數、找不到快照的人數
+6. 實際執行費用
+</script>
 <script>
 'use strict';
 const $ = s => document.querySelector(s);
@@ -1177,6 +1258,21 @@ function setBg(hex, commit) {
   }
 }
 buildColorPanel();
+
+/* ---------- 空白頁：跟 MrGoGo 要資料的 prompt ---------- */
+function fillAsk() {
+  let t = $('#askTpl').textContent.trim();
+  const left = [];
+  document.querySelectorAll('.ask-grid [data-k]').forEach(i => {
+    const v = i.value.trim();
+    if (v) t = t.split('【' + i.dataset.k + '】').join(v); else left.push(i.dataset.k);
+  });
+  $('#askText').value = t;
+  $('#askLeft').textContent = left.length ? `還沒填：${left.join('、')}` : '五項都填好了';
+}
+document.querySelectorAll('.ask-grid [data-k]').forEach(i => i.addEventListener('input', fillAsk));
+$('#askCopy').onclick = () => copyText($('#askText').value).then(() => toast('已複製，貼給 MrGoGo 就好'));
+fillAsk();
 $('#themeSw').onclick = () => { const el = $('#cpanel'); el.hidden = !el.hidden; if (!el.hidden) syncPanel(applyTheme(CP.bg)); };
 try { const t = localStorage.getItem('obsBg'); if (hexToRgb(t)) CP.bg = t; } catch (e) {}
 applyTheme(CP.bg);
