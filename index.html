@@ -1,0 +1,1183 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SSAPI 版本打磨觀察台</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  /* 預設米白；實際值由「版面配色」面板（applyTheme）依背景色算出後覆蓋。
+     -p＝卡片上的文字、-s＝側欄上的文字，各自保證對比，不會被背景吃掉 */
+  color-scheme: light;
+  --page: #f4f3ef; --panel: #fcfcfb; --side: #ebe9e2;
+  --ink: #0b0b0b; --ink-2: #52514e; --muted: #6f6e69;
+  --ink-p: #0b0b0b; --ink2-p: #52514e; --muted-p: #6f6e69;
+  --ink-s: #0b0b0b; --ink2-s: #52514e; --muted-s: #6f6e69;
+  --line: #e1e0d9; --axis: #c3c2b7; --ring: rgba(11,11,11,0.10); --hover: #f4f3ef;
+  --verA: #2a78d6; --verB: #eb6834; --pos: #2a78d6; --neg: #e34948; --focus: #2a78d6;
+}
+aside { --ink: var(--ink-s); --ink-2: var(--ink2-s); --muted: var(--muted-s); color: var(--ink); }
+.card, .strip, .cpanel, select, input, .seg button, .btn, .warn { --ink: var(--ink-p); --ink-2: var(--ink2-p); --muted: var(--muted-p); }
+.card, .strip, .cpanel { color: var(--ink); }
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--page); color: var(--ink);
+  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+}
+.app { display: grid; grid-template-columns: 290px minmax(0, 1fr); min-height: 100vh; }
+aside {
+  background: var(--side); border-right: 1px solid var(--ring);
+  padding: 22px 18px; position: sticky; top: 0; height: 100vh; overflow-y: auto;
+}
+main { padding: 28px 36px 60px; max-width: 1760px; width: 100%; }
+@media (max-width: 860px) {
+  .app { grid-template-columns: 1fr; }
+  aside { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--ring); padding: 16px; }
+  main { padding: 18px 16px 40px; }
+}
+.brand { font-size: 17px; font-weight: 700; letter-spacing: .02em; margin: 0 0 2px; }
+.brand-sub { color: var(--muted); font-size: 12px; margin: 0 0 20px; }
+.grp { margin-bottom: 18px; }
+.grp > label, .grp-title { display: block; font-size: 12px; color: var(--ink-2); margin-bottom: 6px; font-weight: 600; }
+select, input[type=date], input[type=text] {
+  width: 100%; padding: 7px 9px; font: inherit; color: var(--ink);
+  background: var(--panel); border: 1px solid var(--ring); border-radius: 6px;
+}
+select:focus, input:focus, button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--ring); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; background: var(--panel); color: var(--ink-2); padding: 7px 0; font: inherit; font-size: 13px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--ring); }
+.seg button.on { background: var(--ink); color: var(--panel); }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; font: inherit; font-size: 13px;
+  border: 1px solid var(--ring); border-radius: 6px; background: var(--panel); color: var(--ink); cursor: pointer;
+}
+.btn:hover { border-color: var(--axis); }
+.btn.solid, .btn.toggle[aria-pressed="true"] { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.btn.toggle { width: 100%; justify-content: center; }
+.files { font-size: 13px; color: var(--ink-2); margin-top: 8px; }
+.files div { padding: 2px 0; }
+.ok { color: var(--ink); }
+.hint { font-size: 13px; color: var(--muted); margin-top: 5px; }
+.warn { font-size: 12px; color: var(--ink-2); background: var(--panel); border-left: 3px solid var(--neg); padding: 6px 8px; margin-top: 8px; border-radius: 0 4px 4px 0; }
+.theme-sw { margin-top: 22px; }
+
+/* 版面配色面板 */
+.cpanel { position: fixed; left: 18px; bottom: 18px; width: 320px; z-index: 50; background: var(--panel); color: var(--ink);
+  border: 1px solid var(--ring); border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.22); padding: 14px 16px 16px;
+  max-height: calc(100vh - 36px); overflow-y: auto; }
+@media (max-width: 860px) { .cpanel { left: 50%; transform: translateX(-50%); width: min(340px, calc(100vw - 32px)); } }
+.cp-head { display: flex; align-items: center; justify-content: space-between; font-weight: 700; font-size: 16px; margin-bottom: 10px; }
+.cp-x { border: 0; background: none; color: var(--ink-2); font-size: 20px; cursor: pointer; line-height: 1; padding: 2px 6px; }
+.cp-prev { border-radius: 10px; overflow: hidden; border: 1px solid var(--ring); margin-bottom: 12px; display: grid; grid-template-columns: 1fr 1fr; }
+.cp-prev > div { padding: 10px 12px; font-size: 13px; }
+.cp-prev b { display: block; font-size: 18px; }
+.cp-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) 40px; align-items: center; gap: 10px; margin: 8px 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cp-row span:last-child { text-align: right; font-weight: 400; color: var(--ink-2); }
+.cp-row input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 12px; border-radius: 6px; border: 1px solid var(--ring); padding: 0; background: var(--track); cursor: pointer; }
+.cp-row input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #fff; border: 2px solid #222; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+.cp-row input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 2px solid #222; }
+.cp-hex { display: flex; gap: 8px; align-items: center; margin: 10px 0 12px; }
+.cp-hex input { width: 110px; font-family: ui-monospace, Consolas, monospace; }
+.cp-hex .cp-chip { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--ring); }
+.cp-presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
+.cp-presets button { border: 1px solid var(--ring); border-radius: 8px; padding: 18px 0 4px; font: inherit; font-size: 12px; cursor: pointer; position: relative; }
+.cp-btns { display: flex; gap: 8px; }
+.cp-btns .btn { flex: 1; justify-content: center; }
+.cp-score { font-size: 13px; color: var(--ink-2); margin-top: 10px; line-height: 1.6; }
+
+.lead { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.lead h1 { font-size: 26px; margin: 0; font-weight: 700; }
+.lead .scope { color: var(--muted); font-size: 13px; }
+.vtag { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; }
+.vtag::before { content: ""; width: 10px; height: 10px; border-radius: 2px; background: var(--c); }
+.vA { --c: var(--verA); } .vB { --c: var(--verB); }
+
+.strip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); background: var(--panel); border: 1px solid var(--ring); border-radius: 10px; margin-bottom: 26px; }
+.strip > div { padding: 14px 16px; }
+.strip > div + div { border-left: 1px solid var(--line); }
+@media (max-width: 1100px) { .strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } .strip > div { border-left: 0 !important; border-top: 1px solid var(--line); } }
+.kname { font-size: 14px; color: var(--ink-2); }
+.kdiff { font-size: 30px; font-weight: 700; margin: 2px 0 4px; }
+.kpair { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sig { display: inline-block; font-size: 12px; font-weight: 600; padding: 0 6px; border-radius: 3px; border: 1px solid var(--axis); color: var(--ink-2); vertical-align: 3px; margin-left: 4px; }
+.sig.yes { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.dim { color: var(--muted); }
+
+section { margin-bottom: 30px; }
+section > header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+section h2 { font-size: 19px; margin: 0; }
+section h2 .no { color: var(--muted); font-weight: 400; margin-right: 6px; }
+section header .note { color: var(--muted); font-size: 13px; flex: 1; }
+.card { background: var(--panel); border: 1px solid var(--ring); border-radius: 10px; padding: 14px 16px; }
+.tbl-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 9px 14px; font-size: 16px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+th { font-size: 14px; font-weight: 600; color: var(--ink-2); }
+th:first-child, td:first-child { text-align: left; }
+tr.grp-row td { font-size: 14px; color: var(--muted); font-weight: 600; padding-top: 14px; border-bottom: 0; text-align: left; }
+tbody tr:hover td { background: var(--hover); }
+th.colA, th.colB { color: var(--ink); }
+th.colA::before, th.colB::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+th.colA::before { background: var(--verA); } th.colB::before { background: var(--verB); }
+td.sep, th.sep { border-left: 1px solid var(--line); }
+#brkTable th:first-child, #brkTable td:first-child, #brkTableMed th:first-child, #brkTableMed td:first-child { position: sticky; left: 0; background: var(--panel); z-index: 1; }
+th.mid { text-align: center; color: var(--ink); border-bottom: 0; padding-bottom: 0; }
+
+.decomp { display: grid; grid-template-columns: 300px minmax(0, 1fr) 110px; align-items: center; gap: 10px 14px; }
+.decomp .lbl { font-size: 16px; }
+.decomp .lbl small { display: block; color: var(--muted); font-size: 13px; }
+.bar-track { position: relative; height: 22px; }
+.bar-track::before { content: ""; position: absolute; left: 50%; top: -4px; bottom: -4px; width: 1px; background: var(--axis); }
+.bar { position: absolute; top: 4px; height: 14px; border-radius: 0 4px 4px 0; }
+.bar.neg { border-radius: 4px 0 0 4px; }
+.decomp .val { font-size: 16px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.decomp .total { border-top: 1px solid var(--line); padding-top: 10px; }
+.decomp-say { margin: 14px 0 0; color: var(--ink-2); font-size: 15px; }
+
+.two-eq { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.two-eq + .two-eq { margin-top: 16px; }
+@media (max-width: 1000px) { .two-eq { grid-template-columns: 1fr; } }
+.two { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 1000px) { .two { grid-template-columns: 1fr; } }
+.chart-box { position: relative; height: 340px; }
+h3.sub { font-size: 16px; margin: 4px 0 8px; }
+h3.sub + table + h3.sub, table + h3.sub { margin-top: 26px; }
+.chart-tools { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+.chart-tools select { width: auto; }
+
+.empty { text-align: center; padding: 80px 20px; color: var(--ink-2); }
+.empty h1 { font-size: 22px; color: var(--ink); }
+.empty ol { display: inline-block; text-align: left; margin: 10px auto 0; }
+.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink-p); color: var(--panel); padding: 8px 14px; border-radius: 6px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <p class="brand">版本打磨觀察台</p>
+    <p class="brand-sub">SSAPI · A／B 機率版本比較</p>
+
+    <div class="grp">
+      <span class="grp-title">資料檔</span>
+      <button class="btn solid" id="pickBtn" type="button">選擇檔案…</button>
+      <input type="file" id="fileIn" accept=".csv,.xlsx,.xls" multiple hidden>
+      <div class="files" id="fileStatus">
+        <div>· 玩家基本資料：未載入</div>
+        <div>· 玩家每日明細：未載入</div>
+      </div>
+      <div id="loadWarn"></div>
+    </div>
+
+    <div id="ctrls" hidden>
+      <div class="grp">
+        <span class="grp-title">比較版本</span>
+        <div id="tierBox">
+          <select id="rtpTier" aria-label="RTP 檔位"></select>
+          <div class="hint">同一個 RTP 檔位內比 A 對 B；差異都是「B 相對 A」</div>
+        </div>
+        <div id="verManual" hidden>
+          <div class="row2">
+            <select id="verA" aria-label="基準版"></select>
+            <select id="verB" aria-label="比較版"></select>
+          </div>
+          <div class="hint">左＝基準版，右＝比較版；差異都是「比較版相對基準版」</div>
+        </div>
+      </div>
+
+      <div class="grp">
+        <span class="grp-title">分析期間</span>
+        <div class="row2">
+          <input type="date" id="dS" aria-label="開始日">
+          <input type="date" id="dE" aria-label="結束日">
+        </div>
+        <div class="hint" id="periodHint"></div>
+      </div>
+
+      <div class="grp">
+        <label for="segDim">客群</label>
+        <select id="segDim">
+          <option value="all">全部玩家</option>
+          <option value="tier">客群等級</option>
+          <option value="op">營運商（API 目錄）</option>
+        </select>
+        <select id="segVal" style="margin-top:6px" hidden></select>
+        <div class="hint" id="tierHint"></div>
+      </div>
+
+      <div class="grp">
+        <span class="grp-title">新舊玩家</span>
+        <div class="seg" id="nwSeg">
+          <button type="button" data-v="all" class="on">全部</button>
+          <button type="button" data-v="new">新玩家</button>
+          <button type="button" data-v="old">舊玩家</button>
+        </div>
+        <div class="hint">新＝首次遊玩日當天，舊＝之後回來的日子；累積押注、活躍天數、押注拆解以玩家整段期間計，不分新舊</div>
+      </div>
+
+      <div class="grp">
+        <span class="grp-title">少量遊玩的玩家</span>
+        <button class="btn toggle" type="button" id="minRoundsBtn" aria-pressed="true">排除 5 局以下的玩家：開</button>
+        <div class="hint" id="minRoundsHint">以整份資料的一般局總數計，總局數 ≤ 5 的玩家整個不算</div>
+      </div>
+
+    </div>
+
+    <button class="btn theme-sw" id="themeSw" type="button">🎨 版面配色</button>
+  </aside>
+
+  <main>
+    <div class="empty" id="emptyView">
+      <h1>先載入資料</h1>
+      <p>點左上「選擇檔案…」，兩張表可以一次選起來：</p>
+      <ol>
+        <li>玩家基本資料（一個玩家一列）</li>
+        <li>玩家每日明細（一個玩家 × 一天 一列）</li>
+        <li class="dim">（選填）補充欄位：離場前乾旱檔，會依日期＋玩家ID 併進每日明細</li>
+      </ol>
+      <p class="hint">欄位格式見 資料需求.md；想先試用可以載入「假資料」資料夾裡的兩個檔。<br>資料只在這台電腦的瀏覽器裡計算，不會上傳。</p>
+    </div>
+
+    <div id="report" hidden>
+      <div class="lead">
+        <h1 id="leadTitle"></h1>
+        <span class="scope" id="leadScope"></span>
+      </div>
+
+      <div class="strip" id="kpiStrip"></div>
+
+      <section>
+        <header>
+          <h2><span class="no">01</span>版本對照</h2>
+          <span class="note">「顯著」＝95% 信賴水準下差異不是隨機波動；中位數不做檢定。</span>
+          <button class="btn" type="button" data-copy="ovTable">複製表格</button>
+        </header>
+        <div class="card tbl-wrap"><table id="ovTable"></table></div>
+      </section>
+
+      <section>
+        <header>
+          <h2><span class="no">02</span>押注差異從哪來</h2>
+          <span class="note">每人累積押注 ＝ 活躍天數 × 每日局數 × 單局押注（以分析期間內首次遊玩的玩家計）</span>
+        </header>
+        <div class="card">
+          <div class="decomp" id="decomp"></div>
+          <p class="decomp-say" id="decompSay"></p>
+        </div>
+      </section>
+
+      <section>
+        <header>
+          <h2><span class="no">03</span>留存</h2>
+          <span class="note">某天有玩的人，隔 N 天有沒有回來。新玩家從首次遊玩日算，舊玩家從每個回訪日算；只計入已經過了 N 天的起點，括號內為起點人次。</span>
+        </header>
+        <div class="two">
+          <div class="card tbl-wrap"><table id="retTable"></table></div>
+          <div class="card"><div class="chart-box"><canvas id="retChart"></canvas></div></div>
+        </div>
+      </section>
+
+      <section>
+        <header>
+          <h2><span class="no">04</span>客群對照</h2>
+          <span class="note" id="segNote"></span>
+          <select id="brkDim" style="width:auto">
+            <option value="tier">客群等級</option>
+              <option value="op">營運商（API 目錄）</option>
+            <option value="nw" selected>新舊玩家</option>
+          </select>
+          <button class="btn" type="button" data-copy="brkTableMed,brkTable">複製表格</button>
+        </header>
+        <div class="card tbl-wrap">
+          <h3 class="sub">中位數 <span class="dim">（不做顯著檢定）</span></h3>
+          <table id="brkTableMed"></table>
+          <h3 class="sub">平均</h3>
+          <table id="brkTable"></table>
+        </div>
+      </section>
+
+      <section>
+        <header>
+          <h2><span class="no">05</span>每日走勢</h2>
+          <span class="note">下面四張圖一起切換客群。</span>
+          <select id="trendSeg" style="width:auto" aria-label="走勢圖的客群"></select>
+        </header>
+        <div class="two-eq">
+          <div class="card">
+            <div class="chart-tools">
+              <select id="trendMetric1" class="trend-sel" data-default="bet">
+                <option value="dau">每日玩家數（DAU）</option>
+                <option value="bet">人均押注</option>
+                <option value="betBB">人均押注（含 BB）</option>
+                <option value="medBet">押注中位數</option>
+                <option value="spins">人均局數</option>
+                <option value="medSpins">局數中位數</option>
+                <option value="perSpin">單局押注</option>
+                <option value="rtp">實際 RTP</option>
+                <option value="newP">新玩家數</option>
+              </select>
+            </div>
+            <div class="chart-box"><canvas id="trendChart1"></canvas></div>
+          </div>
+          <div class="card">
+            <div class="chart-tools">
+              <select id="trendMetric2" class="trend-sel" data-default="spins">
+                <option value="dau">每日玩家數（DAU）</option>
+                <option value="bet">人均押注</option>
+                <option value="betBB">人均押注（含 BB）</option>
+                <option value="medBet">押注中位數</option>
+                <option value="spins">人均局數</option>
+                <option value="medSpins">局數中位數</option>
+                <option value="perSpin">單局押注</option>
+                <option value="rtp">實際 RTP</option>
+                <option value="newP">新玩家數</option>
+              </select>
+            </div>
+            <div class="chart-box"><canvas id="trendChart2"></canvas></div>
+          </div>
+          <div class="card">
+            <div class="chart-tools">
+              <select id="trendMetric3" class="trend-sel" data-default="medBet">
+                <option value="dau">每日玩家數（DAU）</option>
+                <option value="bet">人均押注</option>
+                <option value="betBB">人均押注（含 BB）</option>
+                <option value="medBet">押注中位數</option>
+                <option value="spins">人均局數</option>
+                <option value="medSpins">局數中位數</option>
+                <option value="perSpin">單局押注</option>
+                <option value="rtp">實際 RTP</option>
+                <option value="newP">新玩家數</option>
+              </select>
+            </div>
+            <div class="chart-box"><canvas id="trendChart3"></canvas></div>
+          </div>
+          <div class="card">
+            <div class="chart-tools">
+              <select id="trendMetric4" class="trend-sel" data-default="medSpins">
+                <option value="dau">每日玩家數（DAU）</option>
+                <option value="bet">人均押注</option>
+                <option value="betBB">人均押注（含 BB）</option>
+                <option value="medBet">押注中位數</option>
+                <option value="spins">人均局數</option>
+                <option value="medSpins">局數中位數</option>
+                <option value="perSpin">單局押注</option>
+                <option value="rtp">實際 RTP</option>
+                <option value="newP">新玩家數</option>
+              </select>
+            </div>
+            <div class="chart-box"><canvas id="trendChart4"></canvas></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const DAY = 86400000;
+// 2026-10-19 定：只看 SC 玩家；排除測試／管理商戶
+const ONLY_CURRENCY = 'SC';
+const EXCLUDE_SHOPS = ['SSSAPI_dev', 'SSSAPI_dev2', 'tcgs1gc_tcgs1gcuat', 'tcgs1sc_tcgs1scuat',
+                       'gcapi_sgl_usd_kaaadmin', 'gcapi_sgl_usd_topadmin'];
+const S = { pRows: null, dRows: null, players: null, byVer: null, versions: [], dMin: 0, dMax: 0,
+            tiers: null, opTop: [], nw: 'all', minRounds: 5, charts: {} };   // 預設排除 5 局以下的玩家
+
+/* ---------- 格式 ---------- */
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const ok = v => v != null && isFinite(v);
+const num = (v, d = 0) => ok(v) ? v.toLocaleString('zh-TW', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—';
+const pct = (v, d = 1) => ok(v) ? (v * 100).toFixed(d) + '%' : '—';
+const sgn = (v, d = 1) => ok(v) ? (v > 0 ? '▲ ' : v < 0 ? '▼ ' : '') + Math.abs(v * 100).toFixed(d) + '%' : '—';
+const pp = v => ok(v) ? (v > 0 ? '▲ ' : v < 0 ? '▼ ' : '') + Math.abs(v * 100).toFixed(1) + ' 百分點' : '—';
+const dstr = n => new Date(n * DAY).toISOString().slice(0, 10);
+
+/* ---------- 解析 ---------- */
+function toNum(v) {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') return isFinite(v) ? v : null;
+  const n = parseFloat(String(v).replace(/[,\s$%]/g, ''));
+  return isNaN(n) ? null : n;
+}
+function toDay(v) {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') return Math.floor(v) - 25569;           // Excel 日期序號
+  const s = String(v).trim();
+  const m = s.match(/(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+  if (m) return Math.round(Date.UTC(+m[1], +m[2] - 1, +m[3]) / DAY);
+  if (/^\d{5}(\.\d+)?$/.test(s)) return Math.floor(+s) - 25569;
+  return null;
+}
+function toSec(v) {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') return Math.round((v - Math.floor(v)) * 86400); // Excel 時間＝一天的分數
+  const m = String(v).match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM|上午|下午)?/i);
+  if (!m) return null;
+  let h = +m[1];
+  const ap = (m[4] || '').toUpperCase();
+  if ((ap === 'PM' || ap === '下午') && h < 12) h += 12;
+  if ((ap === 'AM' || ap === '上午') && h === 12) h = 0;
+  return h * 3600 + (+m[2]) * 60 + (+(m[3] || 0));
+}
+function parseCSV(text) {
+  text = text.replace(/^﻿/, '');
+  const rows = []; let row = [], f = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; }
+      else f += c;
+    } else if (c === '"') q = true;
+    else if (c === ',') { row.push(f); f = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(f); f = ''; if (row.some(x => x !== '')) rows.push(row); row = [];
+    } else f += c;
+  }
+  row.push(f); if (row.some(x => x !== '')) rows.push(row);
+  const head = (rows.shift() || []).map(h => h.trim());
+  return rows.map(r => { const o = {}; head.forEach((h, j) => o[h] = r[j] !== undefined ? r[j] : ''); return o; });
+}
+function decodeText(buf) {
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+  catch (e) { return new TextDecoder('big5').decode(buf); }       // Excel 存的中文 CSV 常是 Big5
+}
+async function readFile(file) {
+  const buf = await file.arrayBuffer();
+  if (/\.xlsx?$/i.test(file.name)) {
+    if (typeof XLSX === 'undefined') throw new Error('讀 Excel 需要網路載入套件；請改存成 CSV');
+    const wb = XLSX.read(buf, { type: 'array' });
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { raw: true, defval: '' });
+    return rows.map(r => { const o = {}; for (const k in r) o[String(k).trim()] = r[k]; return o; });
+  }
+  return parseCSV(decodeText(buf));
+}
+function kindOf(rows) {
+  const h = rows.length ? Object.keys(rows[0]) : [];
+  if (h.includes('機率版本') && h.includes('首次遊玩日')) return 'p';
+  if (h.includes('日期') && h.includes('局數')) return 'd';
+  if (h.includes('日期') && h.includes('玩家ID') && TAILS.some(([, col]) => h.includes(col))) return 'x';   // 補撈的離場前乾旱欄位
+  if (h.includes('玩家ID') && !h.includes('日期') && (h.includes('客群') || h.includes('平台週押注'))) return 'seg';   // 補撈的客群
+  return null;
+}
+const str = v => (v == null ? '' : String(v)).trim();
+// 離場前乾旱：當天最後一個一般局往回數，連續幾局沒觸發 FG／沒中 15 倍以上（2026-10-20 取代原本的「離場前連續未中」）
+const TAILS = [['tailFG', '離場前連續未中FG局數'], ['tail15', '離場前連續未中15倍局數']];
+// 客群等級（2026-10-19 公司分法，全平台、取首次玩寶包熊貓當下）：週押注或累積押注其一達標即算
+const SEG_RULES = [['黑卡大客', 150000, 1500000], ['超級大客', 16000, 160000], ['大客', 5200, 52000],
+                   ['中客', 1500, 15000], ['小客', 400, 4000]];
+const SEG_ORDER = SEG_RULES.map(x => x[0]).concat(['超級小客']);
+function playerSeg(r) {
+  const given = str(r['客群']);
+  if (given) return given;
+  const w = toNum(r['平台週押注']), l = toNum(r['平台累積押注']);
+  if (w == null && l == null) return '(未提供)';
+  for (const [name, wMin, lMin] of SEG_RULES) if ((w != null && w >= wMin) || (l != null && l >= lMin)) return name;
+  return '超級小客';
+}
+
+/* ---------- 建模 ---------- */
+function build() {
+  const warn = [];
+  const players = new Map(), skipped = new Set();
+  const segById = new Map((S.segRows || []).map(r => [str(r['玩家ID']), r]));   // 客群補充檔：依玩家ID 併入
+  const hasCur = S.pRows.length && '幣別' in S.pRows[0];
+  let nCur = 0, nShop = 0, nBB = 0, nMulti = 0, nUncl = 0;
+  for (const r of S.pRows) {
+    const id = str(r['玩家ID']); if (!id) continue;
+    if (EXCLUDE_SHOPS.includes(str(r['商戶原名']))) { skipped.add(id); nShop++; continue; }
+    if (hasCur && str(r['幣別']).toUpperCase() !== ONLY_CURRENCY) { skipped.add(id); nCur++; continue; }
+    if (/^BB/i.test(str(r['機率版本']))) { skipped.add(id); nBB++; continue; }   // 只有 Buy Bonus 版本、沒有一般版本
+    if (str(r['機率版本']) === '多版本') { skipped.add(id); nMulti++; continue; }  // 期間內出現兩種以上一般版本
+    if (str(r['機率版本']) === '未分類') { skipped.add(id); nUncl++; continue; }  // 沒有一般局（只買 BB 或只有 FREESPIN），分不出版本
+    players.set(id, {
+      id, ver: str(r['機率版本']) || '(未填)', first: toDay(r['首次遊玩日']),
+      op: str(r['API目錄名稱']) || str(r['營運商']) || '(未填)',
+      tier: playerSeg(segById.get(id) || r), ffg: toNum(r['首次FG前局數']),
+      rows: [], opG: null
+    });
+  }
+  const merged = new Map(); let miss = 0, badDate = 0;
+  for (const r of S.dRows) {
+    const id = str(r['玩家ID']); const p = players.get(id);
+    if (!p) { if (!skipped.has(id)) miss++; continue; }
+    const d = toDay(r['日期']); if (d == null) { badDate++; continue; }
+    const t0 = toSec(r['首局時間']), t1 = toSec(r['末局時間']);
+    const key = id + '|' + d;
+    let x = merged.get(key);
+    if (!x) {
+      x = { d, p, spins: 0, bet: 0, win: 0, bba: 0, dur: null, tailFG: null, tail15: null };
+      merged.set(key, x); p.rows.push(x);
+    }
+    x.spins += toNum(r['局數']) || 0;
+    x.bet += toNum(r['總押注']) || 0;
+    x.win += toNum(r['總派彩']) || 0;
+    x.bba += toNum(r['BuyBonus金額']) || 0;
+    if (t0 != null && t1 != null && t1 >= t0) x.dur = (x.dur || 0) + (t1 - t0) / 60;
+    for (const [k, col] of TAILS) { const v = toNum(r[col]); if (v != null) x[k] = v; }
+  }
+  S.info = `只算 ${ONLY_CURRENCY} 玩家 ${players.size.toLocaleString()} 人` +
+    (hasCur ? `；已排除非 ${ONLY_CURRENCY} ${nCur.toLocaleString()} 人` : '') + (nShop ? `、測試商戶 ${nShop.toLocaleString()} 人` : '') +
+    (nBB ? `、版本只有 BB 的 ${nBB.toLocaleString()} 人` : '') +
+    (nMulti ? `、多版本 ${nMulti.toLocaleString()} 人` : '') +
+    (nUncl ? `、沒有一般局（分不出版本）${nUncl.toLocaleString()} 人` : '');
+  if (!hasCur) warn.push(`玩家基本資料沒有「幣別」欄，無法只篩 ${ONLY_CURRENCY}，目前是全部玩家`);
+  if (S.xRows) {                                                          // 補充檔：依「日期＋玩家ID」併進每日明細
+    let hit = 0, nomatch = 0;
+    for (const r of S.xRows) {
+      const x = merged.get(str(r['玩家ID']) + '|' + toDay(r['日期']));
+      if (!x) { nomatch++; continue; }
+      hit++;
+      for (const [k, col] of TAILS) { const v = toNum(r[col]); if (v != null) x[k] = v; }
+    }
+    if (nomatch) warn.push(`補充欄位有 ${nomatch.toLocaleString()} 列對不到每日明細（可能是被排除的玩家），已略過`);
+  }
+  if (miss) warn.push(`每日明細有 ${miss.toLocaleString()} 列找不到對應玩家，已略過`);
+  if (badDate) warn.push(`每日明細有 ${badDate.toLocaleString()} 列日期看不懂，已略過`);
+
+  let dMin = Infinity, dMax = -Infinity, noFirst = 0, early = 0, noRows = 0;
+  for (const p of players.values()) {
+    p.rows.sort((a, b) => a.d - b.d);
+    p.totSpins = p.rows.reduce((t, r) => t + r.spins, 0);
+    if (!p.rows.length) { noRows++; continue; }
+    if (p.first == null) { p.first = p.rows[0].d; noFirst++; }
+    if (p.rows[0].d < p.first) early++;
+    for (const r of p.rows) r.isNew = r.d === p.first;
+    dMin = Math.min(dMin, p.rows[0].d); dMax = Math.max(dMax, p.rows[p.rows.length - 1].d);
+  }
+  if (noFirst) warn.push(`${noFirst} 位玩家沒填首次遊玩日，改用明細最早日期`);
+  if (early) warn.push(`${early} 位玩家有早於首次遊玩日的明細，請向資料來源確認`);
+  if (noRows) warn.push(`${noRows.toLocaleString()} 位玩家在每日明細中沒有任何紀錄`);
+  if (!isFinite(dMin)) throw new Error('每日明細沒有可用的資料');
+
+  const byVer = new Map();
+  for (const p of players.values()) { if (!byVer.has(p.ver)) byVer.set(p.ver, []); byVer.get(p.ver).push(p); }
+  Object.assign(S, { players, byVer, versions: [...byVer.keys()].sort(), dMin, dMax, pairKey: null });
+  S.groups = versionGroups();
+  return warn;
+}
+
+// 版本原值像 92A／94B：前面數字＝RTP 檔位，後面字母＝分流
+function versionGroups() {
+  const g = new Map();
+  for (const v of S.versions) {
+    const m = v.match(/^(\d+)\s*([A-Za-z])$/);
+    if (!m) return null;
+    if (!g.has(m[1])) g.set(m[1], []);
+    g.get(m[1]).push(v);
+  }
+  return [...g.entries()].sort((a, b) => a[0] - b[0]).map(([t, vs]) => ({ t, vs: vs.sort() }));
+}
+// 前三大營運商：只用這次比較的兩個版本的玩家來算
+function prepPair(va, vb) {
+  const key = va + '|' + vb; if (S.pairKey === key) return;
+  S.pairKey = key;
+  S.pairPlayers = [...(S.byVer.get(va) || []), ...(va === vb ? [] : S.byVer.get(vb) || [])];
+  const opCount = new Map();
+  for (const p of S.pairPlayers) opCount.set(p.op, (opCount.get(p.op) || 0) + 1);
+  S.opTop = [...opCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(x => x[0]);
+  for (const p of S.players.values()) p.opG = S.opTop.includes(p.op) ? p.op : '其他';
+  const present = new Set(S.pairPlayers.map(p => p.tier));
+  S.tiers = SEG_ORDER.filter(x => present.has(x)).concat([...present].filter(x => !SEG_ORDER.includes(x)).sort());
+  const miss = S.pairPlayers.filter(p => p.tier === '(未提供)').length;
+  $('#tierHint').textContent = '客群等級＝上線前一週（10/12 快照）的全平台客群' + (miss ? `；${miss.toLocaleString()} 人資料沒有客群` : '') + '。';
+  fillTrendSeg();
+  const cur = $('#segVal').value; fillSegVal();
+  if ([...$('#segVal').options].some(o => o.value === cur)) $('#segVal').value = cur;
+}
+
+function quantile(sorted, q) {
+  if (!sorted.length) return null;
+  const pos = (sorted.length - 1) * q, lo = Math.floor(pos), hi = Math.ceil(pos);
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
+}
+function median(arr) { if (!arr.length) return null; return quantile(Float64Array.from(arr).sort(), 0.5); }
+
+/* ---------- 統計 ---------- */
+// 以玩家為單位的比值估計（玩家的多天紀錄彼此相關，不能當成獨立樣本）
+function ratioStat(units) {
+  const n = units.length; if (!n) return { v: null, se: null, n: 0 };
+  let sx = 0, sy = 0; for (const [x, y] of units) { sx += x; sy += y; }
+  const R = sx / sy; if (n < 2 || !sy) return { v: R, se: null, n };
+  let ss = 0; for (const [x, y] of units) { const e = x - R * y; ss += e * e; }
+  return { v: R, se: Math.sqrt(ss / (n - 1) / n) / (sy / n), n };
+}
+function meanStat(arr) {
+  const n = arr.length; if (!n) return { v: null, se: null, n: 0 };
+  let s = 0; for (const x of arr) s += x; const m = s / n;
+  if (n < 2) return { v: m, se: null, n };
+  let ss = 0; for (const x of arr) ss += (x - m) ** 2;
+  return { v: m, se: Math.sqrt(ss / (n - 1) / n), n };
+}
+function propStat(k, n) { if (!n) return { v: null, se: null, n: 0, k: 0 }; const p = k / n; return { v: p, se: Math.sqrt(p * (1 - p) / n), n, k }; }
+function cmp(a, b, abs) {
+  if (!a || !b || !ok(a.v) || !ok(b.v)) return { d: null, sig: null };
+  const diff = b.v - a.v;
+  const d = abs ? diff : (a.v ? diff / a.v : null);
+  if (!ok(a.se) || !ok(b.se)) return { d, sig: null };
+  const se = Math.hypot(a.se, b.se);
+  const ci = 1.96 * se / (abs ? 1 : Math.abs(a.v));
+  return { d, sig: se > 0 ? Math.abs(diff) / se > 1.96 : diff !== 0, ci };
+}
+
+const RET = [{ k: 'd1', name: 'D1 留存', N: 1, range: false }, { k: 'd3', name: 'D3 留存', N: 3, range: false },
+             { k: 'd7', name: 'D7 留存', N: 7, range: false }, { k: 'r3', name: '第 1～3 天有回來', N: 3, range: true },
+             { k: 'r7', name: '第 1～7 天有回來', N: 7, range: true }];
+const CURVE_MAX = 14;
+
+function segOf(p, dim) { return dim === 'tier' ? p.tier : dim === 'op' ? p.opG : null; }
+
+function calcVersion(v, f) {
+  const U = { bet: [], betBB: [], bbShare: [], spins: [], perSpin: [], dur: [], tailFG: [], tail15: [], rtp: [] };
+  const A = { bet: [], betBB: [], spins: [], perSpin: [], dur: [], tailFG: [], tail15: [] };
+  const byDate = new Map();
+  const P = { cumBet: [], cumBetBB: [], cumSpins: [], days: [], ffg: [] };
+  const ret = {}; RET.forEach(r => ret[r.k] = []);
+  const curveN = Math.min(CURVE_MAX, f.e - f.s);
+  const curve = Array.from({ length: curveN + 1 }, () => [0, 0]);
+  let totBet = 0, totBB = 0;
+  for (const p of S.byVer.get(v) || []) {
+    if (f.minRounds && p.totSpins <= f.minRounds) continue;              // 排除少量遊玩的玩家
+    if (f.dim !== 'all' && segOf(p, f.dim) !== f.val) continue;
+    const cohort = p.first >= f.s && p.first <= f.e;
+    let ub = 0, us = 0, un = 0, ud = 0, udn = 0, uw = 0, ubb = 0; const ut = {};
+    let cb = 0, cbb = 0, cs = 0, cd = 0; const played = new Set(), starts = [];
+    for (const r of p.rows) {
+      if (r.d > f.e) continue;
+      played.add(r.d);
+      if (r.d < f.s) continue;
+      if (cohort) { cb += r.bet; cbb += r.bet + r.bba; cs += r.spins; cd++; }
+      if ((f.nw === 'new' && !r.isNew) || (f.nw === 'old' && r.isNew)) continue;
+      starts.push(r.d);
+      un++; ub += r.bet; us += r.spins; uw += r.win; ubb += r.bba;
+      A.bet.push(r.bet); A.betBB.push(r.bet + r.bba); A.spins.push(r.spins); if (r.spins > 0) A.perSpin.push(r.bet / r.spins);
+      if (r.dur != null) { ud += r.dur; udn++; A.dur.push(r.dur); }
+      for (const [k] of TAILS) if (r[k] != null) { (ut[k] = ut[k] || [0, 0])[0] += r[k]; ut[k][1]++; A[k].push(r[k]); }
+      let g = byDate.get(r.d); if (!g) byDate.set(r.d, g = { dau: 0, bet: 0, spins: 0, win: 0, wager: 0, bba: 0, newP: 0, betArr: [], spinsArr: [] });
+      g.betArr.push(r.bet); g.spinsArr.push(r.spins);
+      g.dau++; g.bet += r.bet; g.spins += r.spins; g.win += r.win; g.wager += r.bet + r.bba; g.bba += r.bba; if (r.isNew) g.newP++;
+    }
+    if (un) {
+      U.bet.push([ub, un]); U.betBB.push([ub + ubb, un]); U.spins.push([us, un]); U.perSpin.push([ub, us]); U.rtp.push([uw, ub + ubb]);
+      if (ub + ubb > 0) U.bbShare.push([ubb, ub + ubb]);
+      totBet += ub; totBB += ubb;
+    }
+    if (udn) U.dur.push([ud, udn]);
+    for (const [k] of TAILS) if (ut[k]) U[k].push(ut[k]);
+    if (cohort && cd) {
+      P.cumBet.push(cb); P.cumBetBB.push(cbb); P.cumSpins.push(cs); P.days.push(cd);
+      if (p.ffg != null) P.ffg.push(p.ffg);
+    }
+    // 留存：每個「起點日」看隔 N 天有沒有回來。新＝首次遊玩日當起點，舊＝每個回訪日當起點
+    for (const R of RET) {
+      let hit = 0, elig = 0;
+      for (const d0 of starts) {
+        if (d0 + R.N > f.e) continue;
+        elig++;
+        if (R.range) { for (let k = 1; k <= R.N; k++) if (played.has(d0 + k)) { hit++; break; } }
+        else if (played.has(d0 + R.N)) hit++;
+      }
+      if (elig) ret[R.k].push([hit, elig]);
+    }
+    for (const d0 of starts) for (let k = 1; k <= curveN; k++) if (d0 + k <= f.e) { curve[k][1]++; if (played.has(d0 + k)) curve[k][0]++; }
+  }
+  const nDates = f.e - f.s + 1;
+  let dauSum = 0; for (const g of byDate.values()) dauSum += g.dau;
+  const m = {
+    bet: { ...ratioStat(U.bet), med: median(A.bet) },
+    betBB: { ...ratioStat(U.betBB), med: median(A.betBB) },
+    bbShare: ratioStat(U.bbShare),
+    spins: { ...ratioStat(U.spins), med: median(A.spins) },
+    perSpin: { ...ratioStat(U.perSpin), med: median(A.perSpin) },
+    dur: { ...ratioStat(U.dur), med: median(A.dur) },
+    tailFG: { ...ratioStat(U.tailFG), med: median(A.tailFG) },
+    tail15: { ...ratioStat(U.tail15), med: median(A.tail15) },
+    rtp: ratioStat(U.rtp),
+    cumBet: { ...meanStat(P.cumBet), med: median(P.cumBet) },
+    cumBetBB: { ...meanStat(P.cumBetBB), med: median(P.cumBetBB) },
+    cumSpins: { ...meanStat(P.cumSpins), med: median(P.cumSpins) },
+    days: { ...meanStat(P.days), med: median(P.days) },
+    ffg: { ...meanStat(P.ffg), med: median(P.ffg) },
+    players: { v: U.bet.length },
+    cohort: { v: P.cumBet.length },
+    dau: { v: dauSum / nDates },
+    totBet: { v: totBet },
+    totBetBB: { v: totBet + totBB },
+  };
+  for (const R of RET) {
+    const u = ret[R.k], st = ratioStat(u);   // 同一玩家的多個起點彼此相關，以玩家為單位估誤差
+    m[R.k] = { v: st.v, se: st.se, n: u.reduce((a, x) => a + x[1], 0), k: u.reduce((a, x) => a + x[0], 0), players: u.length };
+  }
+  const sum = a => a.reduce((s, x) => s + x, 0);
+  m.decomp = { N: P.cumBet.length, D: sum(P.days), Sp: sum(P.cumSpins), B: sum(P.cumBet) };
+  m.curve = curve.slice(1).map(([k, n]) => n ? k / n : null);
+  m.curveN = curve.slice(1).map(x => x[1]);
+  m.byDate = byDate;
+  return m;
+}
+
+function pairNow() {
+  if (!S.groups) return { va: $('#verA').value, vb: $('#verB').value };
+  const g = S.groups.find(x => x.t === $('#rtpTier').value) || S.groups[0];
+  return { va: g.vs[0], vb: g.vs[1] || g.vs[0] };
+}
+function filters() {
+  const dim = $('#segDim').value;
+  return {
+    s: toDay($('#dS').value), e: toDay($('#dE').value), dim,
+    val: dim === 'all' ? null : $('#segVal').value, nw: S.nw, minRounds: S.minRounds || 0,
+    ...pairNow()
+  };
+}
+
+/* ---------- 畫面 ---------- */
+const OV = [
+  { g: '每日（一位玩家一天）', rows: [
+    { k: 'bet', name: '人均押注', d: 2, u: 'SC' },
+    { k: 'betBB', name: '人均押注（含 BB）', d: 2, u: 'SC' },
+    { k: 'spins', name: '人均局數', d: 1, u: '局' },
+    { k: 'perSpin', name: '單局押注', d: 2, u: 'SC' },
+    { k: 'dur', name: '每日遊玩時長', d: 1, u: '分鐘' },
+    { k: 'tailFG', name: '離場前連續未中 FG', d: 1, u: '局' },
+    { k: 'tail15', name: '離場前連續未中 15 倍以上', d: 1, u: '局' }] },
+  { g: '玩家（分析期間內累積）', rows: [
+    { k: 'cumBet', name: '每人累積押注', d: 2, u: 'SC' },
+    { k: 'cumBetBB', name: '每人累積押注（含 BB）', d: 2, u: 'SC' },
+    { k: 'cumSpins', name: '每人累積局數', d: 0, u: '局' },
+    { k: 'days', name: '活躍天數', d: 2, u: '天' },
+    { k: 'ffg', name: '首次 FG 前局數', d: 0, u: '局' }] },
+  { g: '整體', rows: [
+    { k: 'players', name: '玩家數', d: 0, u: '人', plain: true },
+    { k: 'dau', name: '平均每日玩家數', d: 0, u: '人', plain: true },
+    { k: 'totBet', name: '總押注', d: 2, u: 'SC', plain: true },
+    { k: 'totBetBB', name: '總押注（含 BB）', d: 2, u: 'SC', plain: true },
+    { k: 'bbShare', name: 'BuyBonus 佔押注', pct: true, pp: true },
+    { k: 'rtp', name: '實際 RTP', pct: true }] },
+];
+function sigTag(c) {
+  if (c.sig == null) return '';
+  return c.sig ? '<span class="sig yes">顯著</span>' : '<span class="sig">不顯著</span>';
+}
+
+function renderOverview(a, b, f) {
+  let h = `<thead><tr><th>指標</th><th class="colA">${esc(f.va)} 平均</th><th class="colB">${esc(f.vb)} 平均</th>` +
+          `<th>差異</th><th class="sep colA">${esc(f.va)} 中位數</th><th class="colB">${esc(f.vb)} 中位數</th><th>中位數差異</th></tr></thead><tbody>`;
+  for (const g of OV) {
+    h += `<tr class="grp-row"><td colspan="7">${g.g}</td></tr>`;
+    for (const r of g.rows) {
+      const A = a[r.k], B = b[r.k], c = r.plain ? cmp({ v: A.v }, { v: B.v }) : cmp(A, B, r.pp);
+      const show = v => r.pct ? pct(v, 2) : num(v, r.d);
+      const md = ok(A.med) && ok(B.med) && A.med ? (B.med - A.med) / A.med : null;
+      h += `<tr><td>${r.name}${r.u ? ` <span class="dim">${r.u}</span>` : ''}</td>` +
+           `<td>${show(A.v)}</td><td>${show(B.v)}</td><td>${r.pp ? pp(c.d) : sgn(c.d)} ${sigTag(c)}</td>` +
+           `<td class="sep">${r.pct || r.plain ? '—' : num(A.med, r.d)}</td><td>${r.pct || r.plain ? '—' : num(B.med, r.d)}</td>` +
+           `<td>${md == null ? '—' : sgn(md)}</td></tr>`;
+    }
+  }
+  $('#ovTable').innerHTML = h + '</tbody>';
+}
+
+function renderKpi(a, b, f) {
+  const items = [
+    { name: '人均押注', A: a.bet, B: b.bet, d: 2 },
+    { name: '人均局數', A: a.spins, B: b.spins, d: 1 },
+    { name: 'D1 留存', A: a.d1, B: b.d1, p: true },
+    { name: '第 1～7 天有回來', A: a.r7, B: b.r7, p: true },
+    { name: '每人累積押注', A: a.cumBet, B: b.cumBet, d: 2 },
+  ];
+  $('#kpiStrip').innerHTML = items.map(it => {
+    const c = cmp(it.A, it.B, it.p);
+    const v = x => it.p ? pct(x) : num(x, it.d);
+    const big = it.p ? (ok(c.d) ? (c.d > 0 ? '+' : '') + (c.d * 100).toFixed(1) + ' pp' : '—') : sgn(c.d);
+    return `<div><div class="kname">${it.name}</div><div class="kdiff">${big}${sigTag(c)}</div>` +
+           `<div class="kpair"><span class="vtag vA">${esc(f.va)}</span> ${v(it.A.v)}　<span class="vtag vB">${esc(f.vb)}</span> ${v(it.B.v)}</div></div>`;
+  }).join('');
+}
+
+function renderDecomp(a, b, f) {
+  const A = a.decomp, B = b.decomp;
+  const fac = (x, k) => k === 0 ? x.D / x.N : k === 1 ? x.Sp / x.D : k === 2 ? x.B / x.Sp : x.B / x.N;
+  const rows = [['活躍天數', '每人平均玩幾天', 0], ['每日局數', '活躍那天平均玩幾局', 1], ['單局押注', '每局平均押多少', 2]];
+  if (!A.N || !B.N) { $('#decomp').innerHTML = '<div class="dim">分析期間內沒有首次遊玩的玩家</div>'; $('#decompSay').textContent = ''; return; }
+  const diffs = rows.map(r => fac(B, r[2]) / fac(A, r[2]) - 1);
+  const tot = fac(B, 3) / fac(A, 3) - 1;
+  const span = Math.max(0.05, ...diffs.map(Math.abs), Math.abs(tot)) * 1.1;
+  const bar = d => {
+    const w = Math.min(50, Math.abs(d) / span * 50);
+    return `<div class="bar-track"><div class="bar ${d < 0 ? 'neg' : ''}" style="${d < 0 ? `right:50%` : `left:50%`};width:${w}%;background:var(${d < 0 ? '--neg' : '--pos'})"></div></div>`;
+  };
+  const line = (lbl, sub, d, va, vb, cls = '') =>
+    `<div class="lbl ${cls}">${lbl}<small>${sub}：${esc(f.va)} ${va}／${esc(f.vb)} ${vb}</small></div>` +
+    `<div class="${cls}">${bar(d)}</div><div class="val ${cls}">${sgn(d)}</div>`;
+  const dec = [2, 1, 2];
+  let h = rows.map((r, i) => line(r[0], r[1], diffs[i], num(fac(A, r[2]), dec[i]), num(fac(B, r[2]), dec[i]))).join('');
+  h += line('每人累積押注', '三項相乘', tot, num(fac(A, 3), 2), num(fac(B, 3), 2), 'total');
+  $('#decomp').innerHTML = h;
+  const lg = d => Math.log(1 + d), lt = lg(tot);
+  const names = rows.map(r => r[0]);
+  const order = diffs.map((d, i) => [i, lg(d)]).sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]));
+  const main = order[0];
+  $('#decompSay').textContent = Math.abs(lt) < 1e-9 ? '兩版每人累積押注相同。' :
+    `${f.vb} 每人累積押注比 ${f.va} ${tot > 0 ? '多' : '少'} ${Math.abs(tot * 100).toFixed(1)}%，` +
+    `影響最大的是「${names[main[0]]}」（${sgn(diffs[main[0]])}）。`;
+}
+
+function renderRetention(a, b, f) {
+  let h = `<thead><tr><th></th><th class="colA">${esc(f.va)}</th><th class="colB">${esc(f.vb)}</th><th>差異</th></tr></thead><tbody>`;
+  for (const R of RET) {
+    const A = a[R.k], B = b[R.k], c = cmp(A, B, true);
+    h += `<tr><td>${R.name}</td><td>${pct(A.v)} <span class="dim">(${num(A.n)})</span></td>` +
+         `<td>${pct(B.v)} <span class="dim">(${num(B.n)})</span></td><td>${pp(c.d)} ${sigTag(c)}</td></tr>`;
+  }
+  h += `<tr><td>活躍天數（平均）</td><td>${num(a.days.v, 2)}</td><td>${num(b.days.v, 2)}</td><td>${sgn(cmp(a.days, b.days).d)} ${sigTag(cmp(a.days, b.days))}</td></tr>`;
+  $('#retTable').innerHTML = h + '</tbody>';
+  const labels = a.curve.map((_, i) => 'D' + (i + 1));
+  drawLine('retChart', labels, [
+    { label: f.va, data: a.curve.map(x => x == null ? null : x * 100), n: a.curveN },
+    { label: f.vb, data: b.curve.map(x => x == null ? null : x * 100), n: b.curveN }], v => v.toFixed(1) + '%', '單日留存');
+}
+
+// 05 的客群切換：跟左側設定，或指定全部／新／舊／某個客群等級／某個營運商
+function fillTrendSeg() {
+  const sel = $('#trendSeg'), cur = sel.value || 'follow';
+  const grp = (label, dim) => {
+    const vs = segValues(dim); if (!vs.length) return '';
+    return `<optgroup label="${label}">` + vs.map(v => `<option value="${dim}:${esc(v)}">${esc(v)}</option>`).join('') + '</optgroup>';
+  };
+  sel.innerHTML = '<option value="follow">跟左側設定</option><option value="all">全部玩家</option>' +
+    '<optgroup label="新舊玩家"><option value="nw:new">新玩家（首日）</option><option value="nw:old">舊玩家（回訪日）</option></optgroup>' +
+    grp('客群等級', 'tier') + grp('營運商', 'op');
+  sel.value = [...sel.options].some(o => o.value === cur) ? cur : 'follow';
+}
+function trendFilter(f) {
+  const v = $('#trendSeg').value || 'follow';
+  if (v === 'follow') return f;
+  if (v === 'all') return { ...f, dim: 'all', nw: 'all' };
+  const k = v.indexOf(':'), dim = v.slice(0, k), val = v.slice(k + 1);
+  return dim === 'nw' ? { ...f, dim: 'all', nw: val } : { ...f, dim, val, nw: 'all' };
+}
+function renderTrend(a, b, f) {
+  const ft = trendFilter(f);
+  const A = ft === f ? a : calcVersion(f.va, ft), B = ft === f ? b : calcVersion(f.vb, ft);
+  for (const n of [1, 2, 3, 4]) renderTrendOne(A, B, ft, n);
+}
+function renderTrendOne(a, b, f, n) {
+  const sel = $('#trendMetric' + n), k = sel.value;
+  const dates = []; for (let d = f.s; d <= f.e; d++) dates.push(d);
+  const val = (g, k) => !g ? null : k === 'medBet' ? median(g.betArr) : k === 'medSpins' ? median(g.spinsArr) : k === 'dau' ? g.dau : k === 'newP' ? g.newP : k === 'bet' ? g.bet / g.dau : k === 'betBB' ? (g.bet + g.bba) / g.dau :
+                       k === 'spins' ? g.spins / g.dau : k === 'perSpin' ? (g.spins ? g.bet / g.spins : null) : (g.wager ? g.win / g.wager * 100 : null);
+  const fmt = k === 'rtp' ? v => v.toFixed(2) + '%' : k === 'perSpin' ? v => v.toFixed(2)
+            : ['bet', 'betBB', 'medBet'].includes(k) ? v => num(v, 2) : ['spins', 'medSpins'].includes(k) ? v => num(v, 1) : v => Math.round(v).toLocaleString();
+  drawLine('trendChart' + n, dates.map(d => dstr(d).slice(5)), [
+    { label: f.va, data: dates.map(d => val(a.byDate.get(d), k)) },
+    { label: f.vb, data: dates.map(d => val(b.byDate.get(d), k)) }], fmt, sel.selectedOptions[0].text);
+}
+
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function drawLine(id, labels, series, fmt, yTitle) {
+  const el = document.getElementById(id);
+  if (typeof Chart === 'undefined') { el.parentElement.innerHTML = '<div class="dim" style="padding:20px">圖表需要網路載入套件，目前離線，表格數字不受影響。</div>'; return; }
+  if (S.charts[id]) S.charts[id].destroy();
+  Chart.defaults.font.size = 13;
+  const cols = [css('--verA'), css('--verB')];
+  S.charts[id] = new Chart(el, {
+    type: 'line',
+    data: { labels, datasets: series.map((s, i) => ({
+      label: s.label, data: s.data, borderColor: cols[i], backgroundColor: cols[i], borderWidth: 2,
+      pointRadius: labels.length > 20 ? 0 : 3, pointHoverRadius: 5, pointBorderColor: css('--panel'), pointBorderWidth: 2,
+      tension: 0.2, spanGaps: true, _n: s.n })) },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', align: 'end', labels: { color: css('--ink2-p'), boxWidth: 10, boxHeight: 10, useBorderRadius: true, borderRadius: 2 } },
+        tooltip: { callbacks: { label: c => {
+          const n = c.dataset._n ? `（${c.dataset._n[c.dataIndex].toLocaleString()} 人）` : '';
+          return ` ${c.dataset.label}：${c.raw == null ? '—' : fmt(c.raw)}${n}`; } } }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: css('--muted-p'), maxRotation: 0, autoSkip: true, maxTicksLimit: 12 }, border: { color: css('--axis') } },
+        y: { grid: { color: css('--line') }, ticks: { color: css('--muted-p'), callback: v => fmt(v) }, border: { display: false },
+             title: { display: true, text: yTitle, color: css('--muted-p'), font: { size: 13 } } }
+      }
+    }
+  });
+}
+
+function segValues(dim) {
+  if (dim === 'tier') return S.tiers.slice();
+  if (dim === 'op') return S.opTop.concat(S.pairPlayers.some(p => p.opG === '其他') ? ['其他'] : []);
+  return [];
+}
+
+// 04 客群對照：指標跟 01 版本對照同一組，另加留存；每個客群一組「A／B／差異」欄，可切平均或中位數
+const BRK_EXTRA = { g: '留存', rows: RET.map(R => ({ k: R.k, name: R.name, ret: true })) };
+function renderBreakdown(f) {
+  const dim = $('#brkDim').value;
+  const vals = dim === 'nw' ? [['new', '新（首日）'], ['old', '舊（回訪日）']] : segValues(dim).map(v => [v, v]);
+  const res = vals.map(([v]) => {
+    const ff = dim === 'nw' ? { ...f, dim: 'all', nw: v } : { ...f, dim, val: v };
+    return { a: calcVersion(f.va, ff), b: calcVersion(f.vb, ff) };
+  });
+  const head = '<thead><tr><th></th>' + vals.map(([, label], i) =>
+    `<th colspan="3" class="sep mid">${esc(label)}<div class="dim" style="font-weight:400;font-size:12px">${esc(f.va)} ${num(res[i].a.players.v)} 人／${esc(f.vb)} ${num(res[i].b.players.v)} 人</div></th>`).join('') +
+    '</tr><tr><th>指標</th>' + vals.map(() => `<th class="sep colA">${esc(f.va)}</th><th class="colB">${esc(f.vb)}</th><th>差異</th>`).join('') + '</tr></thead><tbody>';
+  const build = useMed => {
+    let h = head;
+    for (const g of OV.concat([BRK_EXTRA])) {
+      const perPlayer = g === OV[1];
+      if (dim === 'nw' && perPlayer) continue;                              // 累積類以整個玩家計，不能拆新舊
+      const rows = useMed ? g.rows.filter(r => !r.pct && !r.plain && !r.ret) : g.rows;   // 中位數表只列有中位數的指標
+      if (!rows.length) continue;
+      h += `<tr class="grp-row"><td colspan="${vals.length * 3 + 1}">${g.g}</td></tr>`;
+      for (const r of rows) {
+        h += `<tr><td>${r.name}${r.u ? ` <span class="dim">${r.u}</span>` : ''}</td>`;
+        res.forEach(({ a, b }) => {
+          const A = a[r.k], B = b[r.k];
+          if (useMed) {
+            const md = ok(A.med) && ok(B.med) && A.med ? (B.med - A.med) / A.med : null;
+            h += `<td class="sep">${num(A.med, r.d)}</td><td>${num(B.med, r.d)}</td><td>${md == null ? '—' : sgn(md)}</td>`;
+          } else if (r.ret) {
+            const c = cmp(A, B, true);
+            h += `<td class="sep">${pct(A.v)}</td><td>${pct(B.v)}</td><td>${pp(c.d)} ${sigTag(c)}</td>`;
+          } else {
+            const c = r.plain ? cmp({ v: A.v }, { v: B.v }) : cmp(A, B, r.pp);
+            const show = v => r.pct ? pct(v, 2) : num(v, r.d);
+            h += `<td class="sep">${show(A.v)}</td><td>${show(B.v)}</td><td>${r.pp ? pp(c.d) : sgn(c.d)} ${sigTag(c)}</td>`;
+          }
+        });
+        h += '</tr>';
+      }
+    }
+    return h + '</tbody>';
+  };
+  $('#brkTable').innerHTML = build(false);
+  $('#brkTableMed').innerHTML = build(true);
+  $('#segNote').textContent = dim === 'nw' ? '「玩家累積」類以整段期間的玩家計，無法分新舊，這裡不列。' : '不受左側「客群」篩選影響；受分析期間與新舊玩家設定影響。';
+}
+
+function refresh() {
+  const f = filters();
+  if (f.s == null || f.e == null || f.s > f.e) { toast('分析期間不正確'); return; }
+  prepPair(f.va, f.vb);
+  if (f.dim !== 'all') f.val = $('#segVal').value;
+  const a = calcVersion(f.va, f), b = calcVersion(f.vb, f);
+  S.last = { f, a, b };
+  const segTxt = f.dim === 'all' ? '全部玩家' : `${$('#segDim').selectedOptions[0].text}：${f.val}`;
+  const nwTxt = { all: '', new: '・只看新玩家（首日）', old: '・只看舊玩家（回訪日）' }[f.nw] + (f.minRounds ? `・排除 ${f.minRounds} 局以下` : '');
+  updateMinRoundsHint(f);
+  $('#leadTitle').innerHTML = `<span class="vtag vB">${esc(f.vb)}</span> 對比 <span class="vtag vA">${esc(f.va)}</span>`;
+  $('#leadScope').textContent = `${dstr(f.s)} ～ ${dstr(f.e)}・${segTxt}${nwTxt}`;
+  $('#periodHint').textContent = `資料涵蓋 ${dstr(S.dMin)} ～ ${dstr(S.dMax)}，共 ${S.dMax - S.dMin + 1} 天`;
+  renderKpi(a, b, f); renderOverview(a, b, f); renderDecomp(a, b, f);
+  renderRetention(a, b, f); renderBreakdown(f); renderTrend(a, b, f);
+}
+
+/* ---------- 互動 ---------- */
+function fillSegVal() {
+  const dim = $('#segDim').value, sel = $('#segVal');
+  sel.hidden = dim === 'all';
+  if (dim !== 'all') sel.innerHTML = segValues(dim).map(v => `<option>${esc(v)}</option>`).join('');
+}
+function setupControls() {
+  const vs = S.versions;
+  const opt = v => `<option>${esc(v)}</option>`;
+  $('#verA').innerHTML = vs.map(opt).join(''); $('#verB').innerHTML = vs.map(opt).join('');
+  $('#verA').value = vs[0]; $('#verB').value = vs[1] || vs[0];
+  $('#tierBox').hidden = !S.groups; $('#verManual').hidden = !!S.groups;
+  if (S.groups) {
+    $('#rtpTier').innerHTML = S.groups.map(g => `<option value="${esc(g.t)}">RTP ${esc(g.t)}　` +
+      (g.vs.length > 1 ? `${esc(g.vs[0])} 對 ${esc(g.vs[1])}` : `只有 ${esc(g.vs[0])}`) + '</option>').join('');
+    const big = S.groups.filter(g => g.vs.length > 1).sort((a, b) => (S.byVer.get(b.vs[0]).length + S.byVer.get(b.vs[1]).length) - (S.byVer.get(a.vs[0]).length + S.byVer.get(a.vs[1]).length))[0];
+    if (big) $('#rtpTier').value = big.t;
+  }
+  S.pairKey = null; prepPair(pairNow().va, pairNow().vb);
+  for (const id of ['#dS', '#dE']) { $(id).min = dstr(S.dMin); $(id).max = dstr(S.dMax); }
+  $('#dS').value = dstr(S.dMin); $('#dE').value = dstr(S.dMax);
+  $('#ctrls').hidden = false; $('#emptyView').hidden = true; $('#report').hidden = false;
+}
+
+async function onFiles(list) {
+  const warn = [];
+  for (const file of list) {
+    try {
+      const rows = await readFile(file);
+      const k = kindOf(rows);
+      if (k === 'p') { S.pRows = rows; S.pName = file.name; }
+      else if (k === 'd') { S.dRows = rows; S.dName = file.name; }
+      else if (k === 'x') { S.xRows = rows; S.xName = file.name; }
+      else if (k === 'seg') { S.segRows = rows; S.segName = file.name; }
+      else warn.push(`「${file.name}」認不出是哪張表（找不到「機率版本＋首次遊玩日」或「日期＋局數」欄位）`);
+    } catch (e) { warn.push(`「${file.name}」讀取失敗：${e.message}`); }
+  }
+  $('#fileStatus').innerHTML =
+    `<div class="${S.pRows ? 'ok' : ''}">${S.pRows ? '✓' : '·'} 玩家基本資料：${S.pRows ? esc(S.pName) + `（${S.pRows.length.toLocaleString()} 列）` : '未載入'}</div>` +
+    `<div class="${S.dRows ? 'ok' : ''}">${S.dRows ? '✓' : '·'} 玩家每日明細：${S.dRows ? esc(S.dName) + `（${S.dRows.length.toLocaleString()} 列）` : '未載入'}</div>` +
+    (S.xRows ? `<div class="ok">✓ 補充欄位：${esc(S.xName)}（${S.xRows.length.toLocaleString()} 列）</div>` : '') +
+    (S.segRows ? `<div class="ok">✓ 客群：${esc(S.segName)}（${S.segRows.length.toLocaleString()} 列）</div>` : '');
+  if (S.pRows && S.dRows) {
+    try {
+      warn.push(...build());
+      if (S.versions.length < 2) warn.push('資料裡只有一個機率版本，無法比較');
+      setupControls(); refresh();
+    } catch (e) { warn.push(e.message); }
+  }
+  $('#loadWarn').innerHTML = (S.info && S.players ? `<div class="hint">${esc(S.info)}</div>` : '') + warn.map(w => `<div class="warn">${esc(w)}</div>`).join('');
+}
+
+function tableTSV(id) {
+  return [...document.querySelectorAll(`#${id} tr`)].map(tr =>
+    [...tr.children].map(td => td.innerText.replace(/\s+/g, ' ').trim()).join('\t')).join('\n');
+}
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1600); }
+async function copyText(s) {
+  try { await navigator.clipboard.writeText(s); }
+  catch (e) { const ta = document.createElement('textarea'); ta.value = s; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+  toast('已複製，可直接貼到 Excel');
+}
+
+$('#pickBtn').onclick = () => $('#fileIn').click();
+$('#fileIn').onchange = e => { onFiles([...e.target.files]); e.target.value = ''; };
+for (const id of ['#rtpTier', '#verA', '#verB', '#dS', '#dE', '#segVal', '#brkDim', '#trendSeg', '#trendMetric1', '#trendMetric2', '#trendMetric3', '#trendMetric4']) $(id).addEventListener('change', refresh);
+document.querySelectorAll('.trend-sel').forEach(x => x.value = x.dataset.default);
+$('#segDim').addEventListener('change', () => { fillSegVal(); refresh(); });
+function updateMinRoundsHint(f) {
+  const base = '以整份資料的一般局總數計，總局數 ≤ 5 的玩家整個不算';
+  if (!f.minRounds) { $('#minRoundsHint').textContent = base; return; }
+  const cnt = v => (S.byVer.get(v) || []).filter(p => p.totSpins <= f.minRounds).length;
+  $('#minRoundsHint').textContent = `${base}。目前排除 ${f.va} ${cnt(f.va).toLocaleString()} 人／${f.vb} ${cnt(f.vb).toLocaleString()} 人`;
+}
+$('#minRoundsBtn').addEventListener('click', e => {
+  S.minRounds = S.minRounds ? 0 : 5;
+  e.currentTarget.setAttribute('aria-pressed', S.minRounds ? 'true' : 'false');
+  e.currentTarget.textContent = `排除 5 局以下的玩家：${S.minRounds ? '開' : '關'}`;
+  refresh();
+});
+$('#nwSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  S.nw = b.dataset.v; [...$('#nwSeg').children].forEach(x => x.classList.toggle('on', x === b)); refresh();
+});
+document.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => copyText(b.dataset.copy.split(',').map(tableTSV).join('\n\n')));
+/* ---------- 版面配色：選一個背景色，其他顏色與文字對比自動算 ---------- */
+const PRESETS = [['米白', '#f4f3ef'], ['深夜', '#0d0d0d'], ['薄荷', '#d6efe4'], ['天空', '#cfe3f7'],
+                 ['蜜桃', '#f7d9cc'], ['薰衣草', '#e2daf3'], ['森林', '#17332b'], ['酒紅', '#3b1421']];
+const DEFAULT_BG = '#f4f3ef';
+const hexToRgb = h => { const m = String(h).trim().match(/^#?([0-9a-f]{6})$/i); if (!m) return null; const n = parseInt(m[1], 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+const rgbToHex = c => '#' + c.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+const mixRgb = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));   // 取整，對比用實際顯示的色碼算
+function luminance(c) {
+  const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+}
+function contrast(a, b) { const x = luminance(a), y = luminance(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+// 文字色：黑白中對比高的那個；不夠 4.5 就用純黑／純白（任何背景至少有一個能到 4.5）
+function pickInk(bg) {
+  const dk = [17, 17, 17], lt = [247, 247, 245];
+  let c = contrast(dk, bg) >= contrast(lt, bg) ? dk : lt;
+  if (contrast(c, bg) < 4.5) c = c === dk ? [0, 0, 0] : [255, 255, 255];
+  return c;
+}
+// 次要文字：往背景淡化，但對比不能低於 min
+function soften(ink, bg, min) {
+  let best = ink;
+  for (let t = 0.05; t <= 0.7; t += 0.05) { const c = mixRgb(ink, bg, t); if (contrast(c, bg) >= min) best = c; else break; }
+  return best;
+}
+// 圖表線條、A/B 色塊：對比不足 3 就往黑或白調
+function fitColor(c, bg, min = 3) {
+  if (contrast(c, bg) >= min) return c;
+  const to = luminance(bg) > 0.3 ? [0, 0, 0] : [255, 255, 255];
+  for (let t = 0.05; t <= 1; t += 0.05) { const x = mixRgb(c, to, t); if (contrast(x, bg) >= min) return x; }
+  return to;
+}
+function applyTheme(hex) {
+  const bg = hexToRgb(hex) || hexToRgb(DEFAULT_BG);
+  const dark = contrast([255, 255, 255], bg) > contrast([0, 0, 0], bg);
+  const panel = dark ? mixRgb(bg, [255, 255, 255], 0.07) : mixRgb(bg, [255, 255, 255], 0.72);
+  const side = dark ? mixRgb(bg, [255, 255, 255], 0.035) : mixRgb(bg, [0, 0, 0], 0.045);
+  const inks = surf => { const i = pickInk(surf); return [i, soften(i, surf, 7.2), soften(i, surf, 4.7)]; };   // 留一點餘裕
+  const [iPg, i2Pg, mPg] = inks(bg), [iP, i2P, mP] = inks(panel), [iS, i2S, mS] = inks(side);
+  const A = fitColor(hexToRgb(dark ? '#3987e5' : '#2a78d6'), panel), B = fitColor(hexToRgb(dark ? '#d95926' : '#eb6834'), panel);
+  const neg = fitColor(hexToRgb(dark ? '#e66767' : '#e34948'), panel);
+  const v = {
+    '--page': bg, '--panel': panel, '--side': side,
+    '--ink': iPg, '--ink-2': i2Pg, '--muted': mPg,
+    '--ink-p': iP, '--ink2-p': i2P, '--muted-p': mP,
+    '--ink-s': iS, '--ink2-s': i2S, '--muted-s': mS,
+    '--line': mixRgb(panel, iP, 0.12), '--axis': mixRgb(panel, iP, 0.3), '--hover': mixRgb(panel, iP, 0.05),
+    '--verA': A, '--verB': B, '--pos': A, '--neg': neg, '--focus': A,
+  };
+  const root = document.documentElement.style;
+  for (const k in v) root.setProperty(k, rgbToHex(v[k]));
+  root.setProperty('--ring', `rgba(${iP.map(Math.round).join(',')},0.14)`);
+  root.setProperty('color-scheme', dark ? 'dark' : 'light');
+  return { bg, panel, side, iPg, iP, iS, cPage: contrast(iPg, bg), cPanel: contrast(iP, panel), cSide: contrast(iS, side),
+           cMuted: Math.min(contrast(mPg, bg), contrast(mP, panel), contrast(mS, side)) };
+}
+
+const CP = { bg: DEFAULT_BG };
+function buildColorPanel() {
+  const el = document.createElement('div');
+  el.className = 'cpanel'; el.id = 'cpanel'; el.hidden = true;
+  el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', '版面配色');
+  el.innerHTML = `
+    <div class="cp-head"><span>🎨 版面配色</span><button class="cp-x" type="button" aria-label="關閉">×</button></div>
+    <div class="cp-prev"><div id="cpPrevPage"><b>Aa 頁面</b><span id="cpCPage"></span></div><div id="cpPrevPanel"><b>Aa 卡片</b><span id="cpCPanel"></span></div></div>
+    ${['R', 'G', 'B'].map((ch, i) => `<label class="cp-row"><span>${ch}</span><input type="range" min="0" max="255" data-ch="${i}" aria-label="${ch}"><span data-v="${i}"></span></label>`).join('')}
+    <div class="cp-hex"><div class="cp-chip" id="cpChip"></div><input type="text" id="cpHex" maxlength="7" aria-label="色碼"><span class="hint" style="margin:0">輸入色碼也可以</span></div>
+    <div class="cp-presets">${PRESETS.map(([n, h]) => `<button type="button" data-hex="${h}">${n}</button>`).join('')}</div>
+    <div class="cp-btns"><button class="btn" type="button" id="cpRand">🎲 隨機</button><button class="btn" type="button" id="cpReset">↺ 還原</button></div>
+    <div class="cp-score" id="cpScore"></div>`;
+  document.body.appendChild(el);
+  // 預設色塊各自用自己的顏色與自動文字色
+  el.querySelectorAll('.cp-presets button').forEach(b => { b.style.background = b.dataset.hex; b.style.color = rgbToHex(pickInk(hexToRgb(b.dataset.hex))); });
+  el.querySelector('.cp-x').onclick = () => { el.hidden = true; };
+  el.querySelectorAll('input[type=range]').forEach(r => {
+    r.addEventListener('input', () => { const c = hexToRgb(CP.bg); c[+r.dataset.ch] = +r.value; setBg(rgbToHex(c), false); });
+    r.addEventListener('change', () => setBg(CP.bg, true));
+  });
+  $('#cpHex').addEventListener('change', e => { const c = hexToRgb(e.target.value); if (c) setBg(rgbToHex(c), true); else syncPanel(); });
+  el.querySelectorAll('.cp-presets button').forEach(b => b.onclick = () => setBg(b.dataset.hex, true));
+  $('#cpRand').onclick = () => setBg(rgbToHex([0, 1, 2].map(() => Math.random() * 256)), true);
+  $('#cpReset').onclick = () => setBg(DEFAULT_BG, true);
+}
+function syncPanel(info) {
+  const c = hexToRgb(CP.bg);
+  document.querySelectorAll('#cpanel input[type=range]').forEach(r => {
+    const i = +r.dataset.ch; r.value = c[i];
+    const lo = c.slice(), hi = c.slice(); lo[i] = 0; hi[i] = 255;
+    r.style.setProperty('--track', `linear-gradient(90deg, ${rgbToHex(lo)}, ${rgbToHex(hi)})`);
+    document.querySelector(`#cpanel [data-v="${i}"]`).textContent = c[i];
+  });
+  $('#cpHex').value = CP.bg; $('#cpChip').style.background = CP.bg;
+  if (!info) return;
+  const pv = (id, bg, ink) => { const e = $(id); e.style.background = rgbToHex(bg); e.style.color = rgbToHex(ink); };
+  pv('#cpPrevPage', info.bg, info.iPg); pv('#cpPrevPanel', info.panel, info.iP);
+  $('#cpCPage').textContent = `對比 ${info.cPage.toFixed(1)} : 1`;
+  $('#cpCPanel').textContent = `對比 ${info.cPanel.toFixed(1)} : 1`;
+  const worst = Math.min(info.cPage, info.cPanel, info.cSide);
+  $('#cpScore').textContent = `內文最低對比 ${worst.toFixed(1)} : 1（4.5 以上就清楚）${worst >= 7 ? '　👍 非常清楚' : '　✓ 清楚'}。文字顏色會跟著背景自動換黑或白。`;
+}
+function setBg(hex, commit) {
+  CP.bg = hex;
+  const info = applyTheme(hex);
+  syncPanel(info);
+  if (commit) {
+    try { localStorage.setItem('obsBg', hex); } catch (e) {}
+    if (S.last) refresh();
+  }
+}
+buildColorPanel();
+$('#themeSw').onclick = () => { const el = $('#cpanel'); el.hidden = !el.hidden; if (!el.hidden) syncPanel(applyTheme(CP.bg)); };
+try { const t = localStorage.getItem('obsBg'); if (hexToRgb(t)) CP.bg = t; } catch (e) {}
+applyTheme(CP.bg);
+</script>
+</body>
+</html>
