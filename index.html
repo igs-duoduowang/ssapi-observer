@@ -253,38 +253,7 @@ h3.sub + table + h3.sub, table + h3.sub { margin-top: 26px; }
 
       <section>
         <header>
-          <h2><span class="no">01</span>版本對照</h2>
-          <span class="note">「顯著」＝95% 信賴水準下差異不是隨機波動；中位數不做檢定。</span>
-          <button class="btn" type="button" data-copy="ovTable">複製表格</button>
-        </header>
-        <div class="card tbl-wrap"><table id="ovTable"></table></div>
-      </section>
-
-      <section>
-        <header>
-          <h2><span class="no">02</span>押注差異從哪來</h2>
-          <span class="note">每人累積押注 ＝ 活躍天數 × 每日局數 × 單局押注（以分析期間內首次遊玩的玩家計）</span>
-        </header>
-        <div class="card">
-          <div class="decomp" id="decomp"></div>
-          <p class="decomp-say" id="decompSay"></p>
-        </div>
-      </section>
-
-      <section>
-        <header>
-          <h2><span class="no">03</span>留存</h2>
-          <span class="note">某天有玩的人，隔 N 天有沒有回來。新玩家從首次遊玩日算，舊玩家從每個回訪日算；只計入已經過了 N 天的起點，括號內為起點人次。</span>
-        </header>
-        <div class="two">
-          <div class="card tbl-wrap"><table id="retTable"></table></div>
-          <div class="card"><div class="chart-box"><canvas id="retChart"></canvas></div></div>
-        </div>
-      </section>
-
-      <section>
-        <header>
-          <h2><span class="no">04</span>客群對照</h2>
+          <h2><span class="no">01</span>客群對照</h2>
           <span class="note" id="segNote"></span>
           <select id="brkDim" style="width:auto">
             <option value="tier">客群等級</option>
@@ -303,7 +272,18 @@ h3.sub + table + h3.sub, table + h3.sub { margin-top: 26px; }
 
       <section>
         <header>
-          <h2><span class="no">05</span>每日走勢</h2>
+          <h2><span class="no">02</span>留存</h2>
+          <span class="note">某天有玩的人，隔 N 天有沒有回來。新玩家從首次遊玩日算，舊玩家從每個回訪日算；只計入已經過了 N 天的起點，括號內為起點人次。</span>
+        </header>
+        <div class="two">
+          <div class="card tbl-wrap"><table id="retTable"></table></div>
+          <div class="card"><div class="chart-box"><canvas id="retChart"></canvas></div></div>
+        </div>
+      </section>
+
+      <section>
+        <header>
+          <h2><span class="no">03</span>每日走勢</h2>
           <span class="note">下面四張圖一起切換客群。</span>
           <select id="trendSeg" style="width:auto" aria-label="走勢圖的客群"></select>
         </header>
@@ -372,6 +352,26 @@ h3.sub + table + h3.sub, table + h3.sub { margin-top: 26px; }
             </div>
             <div class="chart-box"><canvas id="trendChart4"></canvas></div>
           </div>
+        </div>
+      </section>
+
+      <section>
+        <header>
+          <h2><span class="no">04</span>版本對照</h2>
+          <span class="note">「顯著」＝95% 信賴水準下差異不是隨機波動；中位數不做檢定。</span>
+          <button class="btn" type="button" data-copy="ovTable">複製表格</button>
+        </header>
+        <div class="card tbl-wrap"><table id="ovTable"></table></div>
+      </section>
+
+      <section>
+        <header>
+          <h2><span class="no">05</span>押注差異從哪來</h2>
+          <span class="note">每人累積押注 ＝ 活躍天數 × 每日局數 × 單局押注（以分析期間內首次遊玩的玩家計）</span>
+        </header>
+        <div class="card">
+          <div class="decomp" id="decomp"></div>
+          <p class="decomp-say" id="decompSay"></p>
         </div>
       </section>
     </div>
