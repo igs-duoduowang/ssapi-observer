@@ -223,7 +223,7 @@ h3.sub + table + h3.sub, table + h3.sub { margin-top: 26px; }
       <div class="grp">
         <span class="grp-title">少量遊玩的玩家</span>
         <button class="btn toggle" type="button" id="minRoundsBtn" aria-pressed="true">排除 5 局以下的玩家：開</button>
-        <div class="hint" id="minRoundsHint">以整份資料的一般局總數計，總局數 ≤ 5 的玩家整個不算</div>
+        <div class="hint" id="minRoundsHint">以分析期間內的一般局總數計，≤ 5 局的玩家整個不算</div>
       </div>
 
     </div>
@@ -634,6 +634,8 @@ const CURVE_MAX = 14;
 
 function segOf(p, dim) { return dim === 'tier' ? p.tier : dim === 'op' ? p.opG : null; }
 
+// 玩家在分析期間內的一般局總數（「排除 5 局以下」用，2026-10-20 改成只算分析期間）
+function periodSpins(p, f) { let n = 0; for (const r of p.rows) if (r.d >= f.s && r.d <= f.e) n += r.spins; return n; }
 function calcVersion(v, f) {
   const U = { bet: [], betBB: [], bbShare: [], spins: [], perSpin: [], dur: [], tailFG: [], tail15: [], rtp: [] };
   const A = { bet: [], betBB: [], spins: [], perSpin: [], dur: [], tailFG: [], tail15: [] };
@@ -644,7 +646,7 @@ function calcVersion(v, f) {
   const curve = Array.from({ length: curveN + 1 }, () => [0, 0]);
   let totBet = 0, totBB = 0;
   for (const p of S.byVer.get(v) || []) {
-    if (f.minRounds && p.totSpins <= f.minRounds) continue;              // 排除少量遊玩的玩家
+    if (f.minRounds && periodSpins(p, f) <= f.minRounds) continue;      // 排除分析期間內局數太少的玩家
     if (f.dim !== 'all' && segOf(p, f.dim) !== f.val) continue;
     const cohort = p.first >= f.s && p.first <= f.e;
     let ub = 0, us = 0, un = 0, ud = 0, udn = 0, uw = 0, ubb = 0; const ut = {};
@@ -1049,9 +1051,9 @@ for (const id of ['#rtpTier', '#verA', '#verB', '#dS', '#dE', '#segVal', '#brkDi
 document.querySelectorAll('.trend-sel').forEach(x => x.value = x.dataset.default);
 $('#segDim').addEventListener('change', () => { fillSegVal(); refresh(); });
 function updateMinRoundsHint(f) {
-  const base = '以整份資料的一般局總數計，總局數 ≤ 5 的玩家整個不算';
+  const base = '以分析期間內的一般局總數計，≤ 5 局的玩家整個不算';
   if (!f.minRounds) { $('#minRoundsHint').textContent = base; return; }
-  const cnt = v => (S.byVer.get(v) || []).filter(p => p.totSpins <= f.minRounds).length;
+  const cnt = v => (S.byVer.get(v) || []).filter(p => p.rows.some(r => r.d >= f.s && r.d <= f.e) && periodSpins(p, f) <= f.minRounds).length;
   $('#minRoundsHint').textContent = `${base}。目前排除 ${f.va} ${cnt(f.va).toLocaleString()} 人／${f.vb} ${cnt(f.vb).toLocaleString()} 人`;
 }
 $('#minRoundsBtn').addEventListener('click', e => {
