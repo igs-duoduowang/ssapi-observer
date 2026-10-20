@@ -277,37 +277,7 @@ h3.sub + table + h3.sub, table + h3.sub { margin-top: 26px; }
 
       <section>
         <header>
-          <h2><span class="no">01</span>客群對照</h2>
-          <span class="note" id="segNote"></span>
-          <select id="brkDim" style="width:auto">
-            <option value="tier">客群等級</option>
-              <option value="op">營運商（API 目錄）</option>
-            <option value="nw" selected>新舊玩家</option>
-          </select>
-          <button class="btn" type="button" data-copy="brkTableMed,brkTable">複製表格</button>
-        </header>
-        <div class="card tbl-wrap">
-          <h3 class="sub">中位數 <span class="dim">（不做顯著檢定）</span></h3>
-          <table id="brkTableMed"></table>
-          <h3 class="sub">平均</h3>
-          <table id="brkTable"></table>
-        </div>
-      </section>
-
-      <section>
-        <header>
-          <h2><span class="no">02</span>留存</h2>
-          <span class="note">某天有玩的人，隔 N 天有沒有回來。新玩家從首次遊玩日算，舊玩家從每個回訪日算；只計入已經過了 N 天的起點，括號內為起點人次。</span>
-        </header>
-        <div class="two">
-          <div class="card tbl-wrap"><table id="retTable"></table></div>
-          <div class="card"><div class="chart-box"><canvas id="retChart"></canvas></div></div>
-        </div>
-      </section>
-
-      <section>
-        <header>
-          <h2><span class="no">03</span>每日走勢</h2>
+          <h2><span class="no">01</span>每日走勢</h2>
           <span class="note">下面四張圖一起切換客群。</span>
           <select id="trendSeg" style="width:auto" aria-label="走勢圖的客群"></select>
         </header>
@@ -376,6 +346,36 @@ h3.sub + table + h3.sub, table + h3.sub { margin-top: 26px; }
             </div>
             <div class="chart-box"><canvas id="trendChart4"></canvas></div>
           </div>
+        </div>
+      </section>
+
+      <section>
+        <header>
+          <h2><span class="no">02</span>客群對照</h2>
+          <span class="note" id="segNote"></span>
+          <select id="brkDim" style="width:auto">
+            <option value="tier">客群等級</option>
+              <option value="op">營運商（API 目錄）</option>
+            <option value="nw" selected>新舊玩家</option>
+          </select>
+          <button class="btn" type="button" data-copy="brkTableMed,brkTable">複製表格</button>
+        </header>
+        <div class="card tbl-wrap">
+          <h3 class="sub">中位數 <span class="dim">（不做顯著檢定）</span></h3>
+          <table id="brkTableMed"></table>
+          <h3 class="sub">平均</h3>
+          <table id="brkTable"></table>
+        </div>
+      </section>
+
+      <section>
+        <header>
+          <h2><span class="no">03</span>留存</h2>
+          <span class="note">某天有玩的人，隔 N 天有沒有回來。新玩家從首次遊玩日算，舊玩家從每個回訪日算；只計入已經過了 N 天的起點，括號內為起點人次。</span>
+        </header>
+        <div class="two">
+          <div class="card tbl-wrap"><table id="retTable"></table></div>
+          <div class="card"><div class="chart-box"><canvas id="retChart"></canvas></div></div>
         </div>
       </section>
 
@@ -960,28 +960,37 @@ function renderTrendOne(a, b, f, n) {
             : ['bet', 'betBB', 'medBet'].includes(k) ? v => num(v, 2) : ['spins', 'medSpins'].includes(k) ? v => num(v, 1) : v => Math.round(v).toLocaleString();
   drawLine('trendChart' + n, dates.map(d => dstr(d).slice(5)), [
     { label: f.va, data: dates.map(d => val(a.byDate.get(d), k)) },
-    { label: f.vb, data: dates.map(d => val(b.byDate.get(d), k)) }], fmt, sel.selectedOptions[0].text);
+    { label: f.vb, data: dates.map(d => val(b.byDate.get(d), k)) }], fmt, sel.selectedOptions[0].text, { avg: true });
 }
 
 function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
-function drawLine(id, labels, series, fmt, yTitle) {
+function drawLine(id, labels, series, fmt, yTitle, opt = {}) {
   const el = document.getElementById(id);
   if (typeof Chart === 'undefined') { el.parentElement.innerHTML = '<div class="dim" style="padding:20px">圖表需要網路載入套件，目前離線，表格數字不受影響。</div>'; return; }
   if (S.charts[id]) S.charts[id].destroy();
   Chart.defaults.font.size = 13;
   const cols = [css('--verA'), css('--verB')];
+  const datasets = series.map((s, i) => ({
+    label: s.label, data: s.data, borderColor: cols[i], backgroundColor: cols[i], borderWidth: 2,
+    pointRadius: labels.length > 20 ? 0 : 3, pointHoverRadius: 5, pointBorderColor: css('--panel'), pointBorderWidth: 2,
+    tension: 0.2, spanGaps: true, _n: s.n }));
+  // 平均虛線：每條線各畫一條，值＝圖上每天數值的平均（有資料的天）
+  if (opt.avg) series.forEach((s, i) => {
+    const v = s.data.filter(x => x != null && isFinite(x));
+    if (!v.length) return;
+    const m = v.reduce((t, x) => t + x, 0) / v.length;
+    datasets.push({ label: `${s.label} 平均 ${fmt(m)}`, data: labels.map(() => m), borderColor: cols[i], backgroundColor: cols[i],
+      borderWidth: 1.5, borderDash: [6, 4], pointRadius: 0, pointHoverRadius: 0, tension: 0, _avg: true });
+  });
   S.charts[id] = new Chart(el, {
     type: 'line',
-    data: { labels, datasets: series.map((s, i) => ({
-      label: s.label, data: s.data, borderColor: cols[i], backgroundColor: cols[i], borderWidth: 2,
-      pointRadius: labels.length > 20 ? 0 : 3, pointHoverRadius: 5, pointBorderColor: css('--panel'), pointBorderWidth: 2,
-      tension: 0.2, spanGaps: true, _n: s.n })) },
+    data: { labels, datasets },
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { position: 'top', align: 'end', labels: { color: css('--ink2-p'), boxWidth: 10, boxHeight: 10, useBorderRadius: true, borderRadius: 2 } },
-        tooltip: { callbacks: { label: c => {
+        tooltip: { filter: it => !it.dataset._avg, callbacks: { label: c => {
           const n = c.dataset._n ? `（${c.dataset._n[c.dataIndex].toLocaleString()} 人）` : '';
           return ` ${c.dataset.label}：${c.raw == null ? '—' : fmt(c.raw)}${n}`; } } }
       },
